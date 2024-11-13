@@ -1,6 +1,7 @@
 # Light Client container configuration
 
-To ease the execution and deployment of our Light Client implementation, we provide a set of Docker configuration file that helps to build and run the necessary components.
+To ease the deployment of our proof servers, we provide a set of Docker configuration file that helps to build and run 
+them.
 
 ## Notice
 
@@ -60,7 +61,7 @@ services:
 You can start the proof server with the following command:
 
 ```bash
-docker compose -f docker/compose/docker-compose-proof-servers.yml -f docker/compose/docker-compose-<aptos|ethereum>.yml up
+docker compose -f docker/compose/docker-compose-proof-servers.yml -f docker/compose/docker-compose-<aptos|ethereum|kadena>.yml up
 ```
 
 This command will start the containers as defined in the docker-compose.yml file. 
