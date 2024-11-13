@@ -62,5 +62,5 @@ is done through HTTP as a client does with a prover.
 > K8S itself.
 
 The HTTP endpoints available for the proof server can be found in the section about [the operation of
-the bridge](../run/operate_bridge.md). The messages sent over HTTO are defined
+the bridge](../run/operate_bridge.md). The messages sent over HTTP are defined
 in [`proof-server/src/types/proof_server.rs`](https://github.com/argumentcomputer/zk-light-clients/blob/dev/ethereum/light-client/src/types/network.rs).

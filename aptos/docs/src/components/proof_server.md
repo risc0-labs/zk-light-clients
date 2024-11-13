@@ -63,8 +63,7 @@ is done through HTTP as a client does with a prover.
 > the proof server is ran using `single` mode and the load balancing is handled by
 > K8S itself.
 
-The HTTP endpoints available for the proof server can be found in the section about [the operation of
-the bridge](../run/operate_bridge.md). The messages sent over HTTO are defined
+The messages sent over HTTP are defined
 in [`proof-server/src/types/proof_server.rs`](https://github.com/argumentcomputer/zk-light-clients/blob/dev/ethereum/light-client/src/types/network.rs).
 
 The server is divided in two, with one main entrypoint. This allows us to handle the worst-case scenario of having to
