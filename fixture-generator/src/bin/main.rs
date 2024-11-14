@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use sphinx_prover::types::HashableKey;
 use sphinx_sdk::{ProverClient, SphinxProof, SphinxProofWithPublicValues};
 use std::fmt::Display;
+use std::fs::File;
 use std::path::{Path, PathBuf};
 
 use ethereum_lc::proofs::committee_change::{CommitteeChangeIn, CommitteeChangeProver};
@@ -306,10 +307,12 @@ fn generate_fixture_epoch_change_aptos_lc() {
 
     let prover = ProverClient::new();
     let (pk, vk) = prover.setup(elf);
+
     let proof = prover.prove(&pk, stdin).plonk().run().unwrap();
     // just to check that proof is valid and verifiable
     prover.verify(&proof, &vk).unwrap();
-    proof.save(Path::new("./")).unwrap();
+    let vk_bin = bcs::to_bytes(&vk).unwrap();
+    std::fs::write("/home/thomas/zk-light-clients/fixture-generator/vk.bin", vk_bin).unwrap();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(APTOS_SOLIDITY_FIXTURE_PATH);
 
