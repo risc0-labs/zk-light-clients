@@ -1,15 +1,11 @@
-[workspace]
 [package]
 version = "1.1.0"
-name = "epoch-change-program"
+name = "epoch-change-program-builder"
 edition = "2021"
 license = "Apache-2.0"
 
-[dependencies]
-aptos-lc-core = { path = "../../core", package = "aptos-lc-core", default-features = false }
-sphinx-zkvm = { git = "https://github.com/argumentcomputer/sphinx", branch = "dev" }
+[build-dependencies]
+risc0-build = { workspace = true, features = ["unstable"] }
 
-[patch.crates-io]
-# Sphinx patch
-tiny-keccak = { git = "https://github.com/sp1-patches/tiny-keccak", branch = "patch-v2.0.2" }
-sha2 = { git = "https://github.com/sp1-patches/RustCrypto-hashes", branch = "patch-v0.10.8" }
+[package.metadata.risc0]
+methods = ["guest"]

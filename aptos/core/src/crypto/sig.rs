@@ -16,7 +16,9 @@ use crate::types::error::TypesError;
 use crate::types::utils::{read_leb128, write_leb128};
 use anyhow::Result;
 use bls12_381::hash_to_curve::{ExpandMsgXmd, HashToCurve};
-use bls12_381::{multi_miller_loop, G1Affine, G2Affine, G2Prepared, G2Projective, Gt};
+use bls12_381::{
+    multi_miller_loop, G1Affine, G1Projective, G2Affine, G2Prepared, G2Projective, Gt,
+};
 use bytes::{Buf, BufMut, BytesMut};
 use getset::Getters;
 use serde::de::Error;
@@ -100,9 +102,13 @@ impl PublicKey {
     /// A `Result` which is `Ok` if the public keys could be aggregated successfully. If the aggregation fails,
     /// the `Result` is `Err` with an error message.
     pub fn aggregate(pubkeys: &[&Self]) -> Result<PublicKey> {
-        let aggregate = pubkeys
-            .iter()
-            .fold(G1Affine::identity(), |acc, pk| acc.add_affine(pk.pubkey()));
+        let aggregate = pubkeys.iter().fold(G1Affine::identity(), |acc, pk| {
+            // TODO (willem): This was a change to get this working with our patched bls12_381 crate without modifications
+            // there is likely a more efficient way to do this addition using our precompiles and not converting to projective form
+            let proj = G1Projective::from(pk.pubkey());
+            let res = acc + proj;
+            G1Affine::from(res)
+        });
 
         let pubkey = OnceCell::new();
         pubkey.set(aggregate).unwrap();

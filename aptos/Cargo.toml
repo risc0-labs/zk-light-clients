@@ -4,7 +4,8 @@ resolver = "2"
 members = [
     "core",
     "light-client",
-    "aptos-programs",
+    # "aptos-programs",
+    "programs/epoch-change",
     "proof-server",
 ]
 
@@ -29,7 +30,7 @@ axum = "0.7.5"
 backoff = { version = "0.4.0", features = ["tokio"] }
 # From https://github.com/aptos-labs/aptos-core/blob/aptos-node-v1.14.0/Cargo.toml#L485
 bcs = { git = "https://github.com/aptos-labs/bcs.git", rev = "d31fab9d81748e2594be5cd5cdf845786a30562d" }
-bls12_381 = { git = "https://github.com/argumentcomputer/bls12_381.git", branch = "zkvm" }
+bls12_381 = "0.8.0"
 bytes = "1.5.0"
 chrono = "0.4.38"
 cfg-if = "1.0.0"
@@ -61,6 +62,9 @@ tokio = "1.37"
 tokio-stream = "0.1"
 alloy-sol-types = "0.7.2"
 tracing = "0.1.40"
+
+risc0-build = { version = "2.3.1" }
+
 
 # Match the forks used by the aptos crates
 [patch.crates-io]
