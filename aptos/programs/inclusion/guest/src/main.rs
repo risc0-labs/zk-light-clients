@@ -1,8 +1,6 @@
 // Copyright (c) Argument Computer Corporation
 // SPDX-License-Identifier: Apache-2.0
 
-#![no_main]
-
 use aptos_lc_core::crypto::hash::{CryptoHash, HashValue};
 use aptos_lc_core::merkle::sparse_proof::SparseMerkleProof;
 use aptos_lc_core::merkle::transaction_proof::TransactionAccumulatorProof;
@@ -10,29 +8,26 @@ use aptos_lc_core::types::ledger_info::LedgerInfoWithSignatures;
 use aptos_lc_core::types::transaction::TransactionInfo;
 use aptos_lc_core::types::validator::ValidatorVerifier;
 
-sphinx_zkvm::entrypoint!(main);
+use risc0_zkvm::guest::env;
 
-pub fn main() {
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-start: read_inputs");
-    }
+fn main() {
+    env::log("cycle-tracker-start: read_inputs");
+
     // Get inputs for account inclusion
-    let sparse_merkle_proof_bytes = sphinx_zkvm::io::read::<Vec<u8>>();
-    let key = sphinx_zkvm::io::read::<[u8; 32]>();
-    let leaf_value_hash = sphinx_zkvm::io::read::<[u8; 32]>();
+    let sparse_merkle_proof_bytes = env::read_frame();
+    let key: [u8; 32] = env::read();
+    let leaf_value_hash: [u8; 32] = env::read();
 
     // Get inputs for tx inclusion
-    let transaction_bytes = sphinx_zkvm::io::read::<Vec<u8>>();
-    let transaction_index = sphinx_zkvm::io::read::<u64>();
-    let transaction_proof = sphinx_zkvm::io::read::<Vec<u8>>();
-    let ledger_info_bytes = sphinx_zkvm::io::read::<Vec<u8>>();
+    let transaction_bytes = env::read_frame();
+    let transaction_index: u64 = env::read();
+    let transaction_proof = env::read_frame();
+    let ledger_info_bytes = env::read_frame();
 
     // Latest verified validator verifier &  hash
-    let verified_validator_verifier = sphinx_zkvm::io::read::<Vec<u8>>();
+    let verified_validator_verifier = env::read_frame();
 
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-end: read_inputs");
-    }
+    env::log("cycle-tracker-end: read_inputs");
 
     // Deserialize Validator Verifier
     let validator_verifier = ValidatorVerifier::from_bytes(&verified_validator_verifier)
@@ -47,36 +42,32 @@ pub fn main() {
     let latest_li = LedgerInfoWithSignatures::from_bytes(&ledger_info_bytes)
         .expect("from_bytes: could not deserialize LedgerInfo");
 
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-start: verify_transaction_inclusion");
-    }
+    env::log("cycle-tracker-start: verify_transaction_inclusion");
 
     let expected_root_hash = latest_li.ledger_info().transaction_accumulator_hash();
 
     transaction_proof
         .verify(expected_root_hash, transaction_hash, transaction_index)
         .expect("verify: could not verify proof");
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-end: verify_transaction_inclusion");
-    }
+
+    env::log("cycle-tracker-end: verify_transaction_inclusion");
 
     // Check signature
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-start: verify_signature");
-    }
+
+    env::log("cycle-tracker-start: verify_signature");
+
     latest_li
         .verify_signatures(&validator_verifier)
         .expect("verify_signatures: could not verify signatures");
-    sphinx_zkvm::lib::unconstrained! {
-                    println!("cycle-tracker-end: verify_signature");
-    }
+
+    env::log("cycle-tracker-end: verify_signature");
+
     // Verify account inclusion in the SparseMerkleTree
     let sparse_merkle_proof = SparseMerkleProof::from_bytes(&sparse_merkle_proof_bytes)
         .expect("from_bytes: could not deserialize SparseMerkleProof");
 
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-start: verify_merkle_proof");
-    }
+    env::log("cycle-tracker-start: verify_merkle_proof");
+
     let sparse_expected_root_hash = transaction
         .state_checkpoint()
         .expect("state_checkpoint: could not get state checkpoint");
@@ -88,23 +79,22 @@ pub fn main() {
                 .expect("leaf_value_hash: could not use input to create HashValue"),
         )
         .expect("verify_by_hash: could not verify proof");
-    sphinx_zkvm::lib::unconstrained! {
-                println!("cycle-tracker-end: verify_merkle_proof");
-    }
+
+    env::log("cycle-tracker-end: verify_merkle_proof");
 
     // Commit the validator verifier hash
-    sphinx_zkvm::io::commit(validator_verifier.hash().as_ref());
+    env::commit(validator_verifier.hash().as_ref());
 
     // Commit the state root hash
-    sphinx_zkvm::io::commit(reconstructed_root_hash.as_ref());
+    env::commit(reconstructed_root_hash.as_ref());
 
     // Commit current block id
     let block_hash = latest_li.ledger_info().block_id();
-    sphinx_zkvm::io::commit(block_hash.as_ref());
+    env::commit(block_hash.as_ref());
 
     // Commit key
-    sphinx_zkvm::io::commit(&key);
+    env::commit(&key);
 
     // Commit leaf value hash
-    sphinx_zkvm::io::commit(&leaf_value_hash);
+    env::commit(&leaf_value_hash);
 }

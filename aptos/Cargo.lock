@@ -5625,6 +5625,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "inclusion-program-builder"
+version = "1.1.0"
+dependencies = [
+ "risc0-build",
+]
+
+[[package]]
 name = "indenter"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
