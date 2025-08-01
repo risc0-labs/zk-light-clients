@@ -7,7 +7,7 @@ members = [
     # "aptos-programs",
     "programs/epoch-change",
     "programs/inclusion",
-    "proof-server",
+    # "proof-server",
 ]
 
 [workspace.package]
@@ -65,6 +65,7 @@ alloy-sol-types = "0.7.2"
 tracing = "0.1.40"
 
 risc0-build = { version = "2.3.1" }
+risc0-zkvm = { version = "2.3.1", default-features = false }
 
 
 # Match the forks used by the aptos crates

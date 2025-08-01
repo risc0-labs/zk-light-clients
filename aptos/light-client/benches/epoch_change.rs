@@ -20,17 +20,15 @@ use anyhow::anyhow;
 use aptos_lc_core::aptos_test_utils::wrapper::AptosWrapper;
 use aptos_lc_core::crypto::hash::CryptoHash;
 use aptos_lc_core::types::trusted_state::TrustedState;
+use epoch_change_program_builder::{EPOCH_CHANGE_PROGRAM_ELF, EPOCH_CHANGE_PROGRAM_ID};
+use risc0_zkvm::{BonsaiProver, ExecutorEnv, LocalProver, ProveInfo, Prover, Receipt};
 use serde::Serialize;
-use sphinx_sdk::artifacts::try_install_plonk_bn254_artifacts;
-use sphinx_sdk::utils::setup_logger;
-use sphinx_sdk::{ProverClient, SphinxProofWithPublicValues, SphinxStdin};
 use std::env;
 use std::hint::black_box;
 use std::time::Instant;
 
-struct ProvingAssets {
-    mode: ProvingMode,
-    client: ProverClient,
+struct ProvingAssets<P> {
+    prover: P,
     trusted_state: Vec<u8>,
     validator_verifier_hash: Vec<u8>,
     epoch_change_proof: Vec<u8>,
@@ -66,9 +64,9 @@ impl TryFrom<&str> for ProvingMode {
 const NBR_VALIDATORS: usize = 130;
 const AVERAGE_SIGNERS_NBR: usize = 95;
 
-impl ProvingAssets {
+impl<P: Prover> ProvingAssets<P> {
     /// Constructs a new instance of `ProvingAssets` by setting up the necessary state and proofs for the benchmark.
-    fn new(mode: ProvingMode) -> Self {
+    fn new(prover: P) -> Self {
         let mut aptos_wrapper = AptosWrapper::new(2, NBR_VALIDATORS, AVERAGE_SIGNERS_NBR).unwrap();
 
         let trusted_state = bcs::to_bytes(aptos_wrapper.trusted_state()).unwrap();
@@ -86,36 +84,27 @@ impl ProvingAssets {
 
         let epoch_change_proof = &bcs::to_bytes(state_proof.epoch_changes()).unwrap();
 
-        let client = ProverClient::new();
-
         Self {
-            mode,
-            client,
+            prover,
             trusted_state,
             validator_verifier_hash,
             epoch_change_proof: epoch_change_proof.clone(),
         }
     }
 
-    fn prove(&self) -> SphinxProofWithPublicValues {
-        let mut stdin = SphinxStdin::new();
+    fn prove(&self) -> Result<ProveInfo, anyhow::Error> {
+        let env = ExecutorEnv::builder()
+            .write_frame(&self.trusted_state)
+            .write_frame(&self.epoch_change_proof)
+            .build()?;
 
-        setup_logger();
-
-        stdin.write(&self.trusted_state);
-        stdin.write(&self.epoch_change_proof);
-
-        let (pk, _) = self.client.setup(aptos_programs::EPOCH_CHANGE_PROGRAM);
-
-        match self.mode {
-            ProvingMode::STARK => self.client.prove(&pk, stdin).run().unwrap(),
-            ProvingMode::SNARK => self.client.prove(&pk, stdin).plonk().run().unwrap(),
-        }
+        self.prover.prove(env, EPOCH_CHANGE_PROGRAM_ELF)
     }
 
-    fn verify(&self, proof: &SphinxProofWithPublicValues) {
-        let (_, vk) = self.client.setup(aptos_programs::EPOCH_CHANGE_PROGRAM);
-        self.client.verify(proof, &vk).expect("Verification failed");
+    fn verify(&self, receipt: &Receipt) {
+        receipt
+            .verify(EPOCH_CHANGE_PROGRAM_ID)
+            .expect("Verification failed");
     }
 }
 
@@ -130,18 +119,18 @@ fn main() {
     let mode = ProvingMode::try_from(mode_str.as_str()).expect("MODE should be STARK or SNARK");
 
     // Initialize the proving assets and benchmark the proving process.
-    let proving_assets = ProvingAssets::new(mode);
-
-    if mode == ProvingMode::SNARK {
-        let _ = try_install_plonk_bn254_artifacts(false);
-    }
+    let prover = LocalProver::new("epoch_change_prover");
+    let proving_assets = ProvingAssets::new(prover);
 
     let start_proving = Instant::now();
-    let mut epoch_change_proof = proving_assets.prove();
+    let mut epoch_change_proof = proving_assets.prove().expect("Proving failed");
     let proving_time = start_proving.elapsed();
 
     // Verify that the computed hash matches the expected validator verifier hash.
-    let prev_validator_verifier_hash = epoch_change_proof.public_values.read::<[u8; 32]>();
+    let prev_validator_verifier_hash: [u8; 32] = epoch_change_proof.receipt.journal.bytes[0..32]
+        .try_into()
+        .expect("Failed to convert bytes to array");
+
     // This verifies predicate consistency required by P2.
     assert_eq!(
         prev_validator_verifier_hash,
@@ -150,7 +139,7 @@ fn main() {
 
     // Benchmark the verification process.
     let start_verifying = Instant::now();
-    proving_assets.verify(black_box(&epoch_change_proof));
+    proving_assets.verify(black_box(&epoch_change_proof.receipt));
     let verifying_time = start_verifying.elapsed();
 
     // Print results in JSON format.

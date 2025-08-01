@@ -12,8 +12,14 @@ license = { workspace = true }
 aptos-lc-core = { path = "../core", optional = true }
 aptos-programs = { path = "../aptos-programs" }
 
+# R0 guest crates
+epoch-change-program-builder = { path = "../programs/epoch-change" }
+
 # Sphinx crates
 sphinx-sdk = { workspace = true, features = ["plonk"] }
+
+# R0 crates
+risc0-zkvm = { workspace = true, features = ["std", "unstable", "bonsai", "prove"] }
 
 #Others
 anyhow = { workspace = true }

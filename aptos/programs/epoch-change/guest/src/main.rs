@@ -67,10 +67,10 @@ pub fn main() {
         TrustedState::EpochState { epoch_state, .. } => epoch_state.verifier().hash(),
         _ => panic!("Expected epoch change for current trusted state"),
     };
-    env::commit(prev_epoch_validator_verifier_hash.as_ref());
+    env::commit_slice(prev_epoch_validator_verifier_hash.as_ref());
 
     env::log("cycle-tracker-end: hash_prev_validator");
 
     // Hash new validator verifier and pass the hash as the now trusted state
-    env::commit(validator_verifier_hash.as_ref());
+    env::commit_slice(validator_verifier_hash.as_ref());
 }
