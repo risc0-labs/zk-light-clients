@@ -14,6 +14,7 @@ aptos-programs = { path = "../aptos-programs" }
 
 # R0 guest crates
 epoch-change-program-builder = { path = "../programs/epoch-change" }
+inclusion-program-builder = { path = "../programs/inclusion" }
 
 # Sphinx crates
 sphinx-sdk = { workspace = true, features = ["plonk"] }

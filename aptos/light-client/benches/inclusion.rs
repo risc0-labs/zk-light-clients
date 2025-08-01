@@ -26,21 +26,20 @@ use aptos_lc_core::crypto::hash::CryptoHash;
 use aptos_lc_core::types::ledger_info::LedgerInfoWithSignatures;
 use aptos_lc_core::types::trusted_state::TrustedState;
 use aptos_lc_core::types::validator::ValidatorVerifier;
+use inclusion_program_builder::{INCLUSION_PROGRAM_ELF, INCLUSION_PROGRAM_ID};
+use risc0_zkvm::{BonsaiProver, ExecutorEnv, LocalProver, ProveInfo, Prover, Receipt};
 use serde::Serialize;
-use sphinx_sdk::artifacts::try_install_plonk_bn254_artifacts;
-use sphinx_sdk::utils::setup_logger;
-use sphinx_sdk::{ProverClient, SphinxProofWithPublicValues, SphinxStdin};
 use std::env;
 use std::hint::black_box;
+use std::io::{Cursor, Read};
 use std::time::Instant;
 
 const NBR_LEAVES: [usize; 5] = [32, 128, 2048, 8192, 32768];
 const NBR_VALIDATORS: usize = 130;
 const AVERAGE_SIGNERS_NBR: usize = 95;
 
-struct ProvingAssets {
-    mode: ProvingMode,
-    client: ProverClient,
+struct ProvingAssets<P> {
+    prover: P,
     sparse_merkle_proof_assets: SparseMerkleProofAssets,
     transaction_proof_assets: TransactionProofAssets,
     validator_verifier_assets: ValidatorVerifierAssets,
@@ -75,9 +74,8 @@ impl TryFrom<&str> for ProvingMode {
     }
 }
 
-impl ProvingAssets {
-    /// Constructs proving assets for a given number of leaves, preparing the account inclusion proof.
-    fn from_nbr_leaves(mode: ProvingMode, nbr_leaves: usize) -> Self {
+impl<P: Prover> ProvingAssets<P> {
+    fn from_nbr_leaves(prover: P, nbr_leaves: usize) -> Self {
         let mut aptos_wrapper =
             AptosWrapper::new(nbr_leaves, NBR_VALIDATORS, AVERAGE_SIGNERS_NBR).unwrap();
         aptos_wrapper.generate_traffic().unwrap();
@@ -117,11 +115,8 @@ impl ProvingAssets {
 
         let validator_verifier_assets = ValidatorVerifierAssets::new(validator_verifier.to_bytes());
 
-        let client = ProverClient::new();
-
         Self {
-            mode,
-            client,
+            prover,
             sparse_merkle_proof_assets,
             transaction_proof_assets,
             validator_verifier_assets,
@@ -131,37 +126,32 @@ impl ProvingAssets {
 
     /// Proves the account inclusion using the ProverClient.
     /// Evaluates the predicate P3 during the proving process.
-    fn prove(&self) -> SphinxProofWithPublicValues {
-        let mut stdin = SphinxStdin::new();
+    fn prove(&self) -> Result<ProveInfo, anyhow::Error> {
+        let env = ExecutorEnv::builder()
+            .write_frame(&self.sparse_merkle_proof_assets.sparse_merkle_proof())
+            .write(self.sparse_merkle_proof_assets.leaf_key())?
+            .write(self.sparse_merkle_proof_assets.leaf_hash())?
+            .write_frame(&self.transaction_proof_assets.transaction())
+            .write(self.transaction_proof_assets.transaction_index())?
+            .write_frame(&self.transaction_proof_assets.transaction_proof())
+            .write_frame(&self.transaction_proof_assets.latest_li())
+            .write_frame(&self.validator_verifier_assets.validator_verifier())
+            .build()?;
 
-        setup_logger();
-
-        // Account inclusion input: Writes Merkle proof related data to stdin.
-        stdin.write(self.sparse_merkle_proof_assets.sparse_merkle_proof());
-        stdin.write(self.sparse_merkle_proof_assets.leaf_key());
-        stdin.write(self.sparse_merkle_proof_assets.leaf_hash());
-
-        // Tx inclusion input: Writes transaction related data to stdin.
-        stdin.write(self.transaction_proof_assets.transaction());
-        stdin.write(self.transaction_proof_assets.transaction_index());
-        stdin.write(self.transaction_proof_assets.transaction_proof());
-        stdin.write(self.transaction_proof_assets.latest_li());
-
-        // Validator verifier: Writes validator verifier data for proof validation.
-        stdin.write(self.validator_verifier_assets.validator_verifier());
-
-        let (pk, _) = self.client.setup(aptos_programs::INCLUSION_PROGRAM);
-
-        match self.mode {
-            ProvingMode::STARK => self.client.prove(&pk, stdin).run().unwrap(),
-            ProvingMode::SNARK => self.client.prove(&pk, stdin).plonk().run().unwrap(),
-        }
+        self.prover.prove(env, INCLUSION_PROGRAM_ELF)
     }
 
-    fn verify(&self, proof: &SphinxProofWithPublicValues) {
-        let (_, vk) = self.client.setup(aptos_programs::INCLUSION_PROGRAM);
-        self.client.verify(proof, &vk).expect("Verification failed");
+    fn verify(&self, receipt: &Receipt) {
+        receipt
+            .verify(INCLUSION_PROGRAM_ID)
+            .expect("Verification failed");
     }
+}
+
+fn read_array<const N: usize>(cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<[u8; N]> {
+    let mut array = [0u8; N];
+    cursor.read_exact(&mut array)?;
+    Ok(array)
 }
 
 #[derive(Serialize)]
@@ -169,26 +159,27 @@ struct Timings {
     nbr_leaves: usize,
     proving_time: u128,
     verifying_time: u128,
+    cycles: u64,
 }
 
 fn main() {
     let mode_str: String = env::var("MODE").unwrap_or_else(|_| "STARK".into());
     let mode = ProvingMode::try_from(mode_str.as_str()).expect("MODE should be STARK or SNARK");
 
-    if mode == ProvingMode::SNARK {
-        let _ = try_install_plonk_bn254_artifacts(false);
-    }
-
     for nbr_leaves in NBR_LEAVES {
-        let proving_assets = ProvingAssets::from_nbr_leaves(mode, nbr_leaves);
+        let prover = LocalProver::new("epoch_change_prover");
+        let proving_assets = ProvingAssets::from_nbr_leaves(prover, nbr_leaves);
 
         let start_proving = Instant::now();
-        let mut inclusion_proof = proving_assets.prove();
+        let inclusion_proof = proving_assets.prove().expect("Proving failed");
         let proving_time = start_proving.elapsed();
+
+        let mut journal = Cursor::new(inclusion_proof.receipt.journal.bytes.clone());
 
         // Verify the consistency of the validator verifier hash post-merkle proof.
         // This verifies the validator consistency required by P1.
-        let prev_validator_verifier_hash = inclusion_proof.public_values.read::<[u8; 32]>();
+        let prev_validator_verifier_hash: [u8; 32] =
+            read_array(&mut journal).expect("Failed to read previous validator verifier hash");
         assert_eq!(
             &prev_validator_verifier_hash,
             ValidatorVerifier::from_bytes(
@@ -204,13 +195,14 @@ fn main() {
         // Verify the consistency of the final merkle root hash computed
         // by the program against the expected one.
         // This verifies P3 out-of-circuit.
-        let merkle_root_slice: [u8; 32] = inclusion_proof.public_values.read();
+        let merkle_root_slice: [u8; 32] =
+            read_array(&mut journal).expect("Failed to read merkle_root_slice");
         assert_eq!(
             merkle_root_slice, proving_assets.state_checkpoint_hash,
             "Merkle root hash mismatch"
         );
 
-        let block_hash: [u8; 32] = inclusion_proof.public_values.read();
+        let block_hash: [u8; 32] = read_array(&mut journal).expect("Failed to read block_hash");
         let lates_li = proving_assets.transaction_proof_assets.latest_li();
         let expected_block_id = LedgerInfoWithSignatures::from_bytes(lates_li)
             .unwrap()
@@ -222,14 +214,14 @@ fn main() {
             "Block hash mismatch"
         );
 
-        let key: [u8; 32] = inclusion_proof.public_values.read();
+        let key: [u8; 32] = read_array(&mut journal).expect("Failed to read key");
         assert_eq!(
             key.to_vec(),
             proving_assets.sparse_merkle_proof_assets.leaf_key(),
             "Merkle tree key mismatch"
         );
 
-        let value: [u8; 32] = inclusion_proof.public_values.read();
+        let value: [u8; 32] = read_array(&mut journal).expect("Failed to read value");
         assert_eq!(
             value.to_vec(),
             proving_assets.sparse_merkle_proof_assets.leaf_hash(),
@@ -237,13 +229,14 @@ fn main() {
         );
 
         let start_verifying = Instant::now();
-        proving_assets.verify(black_box(&inclusion_proof));
+        proving_assets.verify(black_box(&inclusion_proof.receipt));
         let verifying_time = start_verifying.elapsed();
 
         let timings = Timings {
             nbr_leaves,
             proving_time: proving_time.as_millis(),
             verifying_time: verifying_time.as_millis(),
+            cycles: inclusion_proof.stats.total_cycles,
         };
 
         let json_output = serde_json::to_string(&timings).unwrap();

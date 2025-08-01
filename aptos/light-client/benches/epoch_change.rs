@@ -112,6 +112,7 @@ impl<P: Prover> ProvingAssets<P> {
 struct Timings {
     proving_time: u128,
     verifying_time: u128,
+    cycles: u64,
 }
 
 fn main() {
@@ -123,7 +124,7 @@ fn main() {
     let proving_assets = ProvingAssets::new(prover);
 
     let start_proving = Instant::now();
-    let mut epoch_change_proof = proving_assets.prove().expect("Proving failed");
+    let epoch_change_proof = proving_assets.prove().expect("Proving failed");
     let proving_time = start_proving.elapsed();
 
     // Verify that the computed hash matches the expected validator verifier hash.
@@ -146,6 +147,7 @@ fn main() {
     let timings = Timings {
         proving_time: proving_time.as_millis(),
         verifying_time: verifying_time.as_millis(),
+        cycles: epoch_change_proof.stats.total_cycles,
     };
 
     let json_output = serde_json::to_string(&timings).unwrap();

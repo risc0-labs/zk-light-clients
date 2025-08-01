@@ -83,18 +83,18 @@ fn main() {
     env::log("cycle-tracker-end: verify_merkle_proof");
 
     // Commit the validator verifier hash
-    env::commit(validator_verifier.hash().as_ref());
+    env::commit_slice(validator_verifier.hash().as_ref());
 
     // Commit the state root hash
-    env::commit(reconstructed_root_hash.as_ref());
+    env::commit_slice(reconstructed_root_hash.as_ref());
 
     // Commit current block id
     let block_hash = latest_li.ledger_info().block_id();
-    env::commit(block_hash.as_ref());
+    env::commit_slice(block_hash.as_ref());
 
     // Commit key
-    env::commit(&key);
+    env::commit_slice(&key);
 
     // Commit leaf value hash
-    env::commit(&leaf_value_hash);
+    env::commit_slice(&leaf_value_hash);
 }
