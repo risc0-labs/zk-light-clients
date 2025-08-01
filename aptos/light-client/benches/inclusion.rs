@@ -37,8 +37,8 @@ use std::io::{Cursor, Read};
 use std::time::Instant;
 
 const NBR_LEAVES: [usize; 5] = [32, 128, 2048, 8192, 32768];
-const NBR_VALIDATORS: usize = 130;
-const AVERAGE_SIGNERS_NBR: usize = 95;
+const NBR_VALIDATORS: usize = 148;
+const AVERAGE_SIGNERS_NBR: usize = 148;
 
 struct ProvingAssets<P> {
     prover: P,

@@ -445,6 +445,7 @@ impl ValidatorVerifier {
                     chunk.try_into().expect("Invalid chunk size"),
                 )
                 .expect("Failed to convert chunk to G1Affine");
+                assert!(bool::from(uncompressed_key.is_on_curve()));
                 self.validator_infos[i]
                     .public_key
                     .decompress_with_witness(uncompressed_key);

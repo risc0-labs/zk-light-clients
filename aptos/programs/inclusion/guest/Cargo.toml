@@ -5,6 +5,10 @@ name = "inclusion-program"
 edition = "2021"
 license = "Apache-2.0"
 
+[profile.release]
+codegen-units = 1
+lto = "fat"
+
 [dependencies]
 aptos-lc-core = { path = "../../../core", package = "aptos-lc-core", default-features = false }
 risc0-zkvm = { version = "2.3.1", features = ["std", "unstable"] }

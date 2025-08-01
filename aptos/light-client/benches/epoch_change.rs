@@ -23,7 +23,7 @@ use aptos_lc_core::types::trusted_state::TrustedState;
 use aptos_types::trusted_state::TrustedState as AptosTrustedState;
 use bls12_381::G1Affine;
 use epoch_change_program_builder::{EPOCH_CHANGE_PROGRAM_ELF, EPOCH_CHANGE_PROGRAM_ID};
-use risc0_zkvm::{BonsaiProver, ExecutorEnv, LocalProver, ProveInfo, Prover, Receipt};
+use risc0_zkvm::{BonsaiProver, ExecutorEnv, LocalProver, ProveInfo, Prover, ProverOpts, Receipt};
 use serde::Serialize;
 use std::env;
 use std::hint::black_box;
@@ -64,8 +64,8 @@ impl TryFrom<&str> for ProvingMode {
     }
 }
 
-const NBR_VALIDATORS: usize = 130;
-const AVERAGE_SIGNERS_NBR: usize = 95;
+const NBR_VALIDATORS: usize = 148;
+const AVERAGE_SIGNERS_NBR: usize = 148;
 
 impl<P: Prover> ProvingAssets<P> {
     /// Constructs a new instance of `ProvingAssets` by setting up the necessary state and proofs for the benchmark.
@@ -103,7 +103,8 @@ impl<P: Prover> ProvingAssets<P> {
             .write_frame(&self.pubkey_witnesses)
             .build()?;
 
-        self.prover.prove(env, EPOCH_CHANGE_PROGRAM_ELF)
+        self.prover
+            .prove_with_opts(env, EPOCH_CHANGE_PROGRAM_ELF, &ProverOpts::fast())
     }
 
     fn verify(&self, receipt: &Receipt) {
@@ -148,6 +149,7 @@ fn main() {
 
     // Initialize the proving assets and benchmark the proving process.
     let prover = LocalProver::new("epoch_change_prover");
+    // let prover = BonsaiProver::new("epoch_change_prover");
     let proving_assets = ProvingAssets::new(prover);
 
     let start_proving = Instant::now();
