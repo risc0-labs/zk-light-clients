@@ -10,6 +10,7 @@ use crate::types::ledger_info::LedgerInfo;
 use crate::types::utils::{read_leb128, write_leb128, LEB128_PUBKEY_LEN, VOTING_POWER_OFFSET_INCR};
 use crate::types::{AccountAddress, ACCOUNT_ADDRESS_SIZE};
 use anyhow::Result;
+use bls12_381::G1Affine;
 use bytes::{Buf, BufMut, BytesMut};
 use getset::Getters;
 use serde::{Deserialize, Deserializer, Serialize};
@@ -121,7 +122,7 @@ impl ValidatorConsensusInfo {
 #[getset(get = "pub")]
 pub struct ValidatorVerifier {
     /// A vector of each validator's on-chain account address to its pubkeys and voting power.
-    pub validator_infos: Vec<ValidatorConsensusInfo>,
+    validator_infos: Vec<ValidatorConsensusInfo>,
 }
 
 impl ValidatorVerifier {
@@ -433,6 +434,22 @@ impl ValidatorVerifier {
         let (slice_len, bytes_read) =
             read_leb128(bytes).map_err(|e| serde_error!("ValidatorVerifier", e))?;
         Ok(slice_len as usize * VALIDATOR_CONSENSUS_INFO_SIZE + bytes_read)
+    }
+
+    pub fn ingest_key_witnesss(&mut self, pubkey_witnesses: &[u8]) -> anyhow::Result<()> {
+        pubkey_witnesses
+            .chunks(96)
+            .enumerate()
+            .for_each(|(i, chunk)| {
+                let uncompressed_key = G1Affine::from_uncompressed_unchecked(
+                    chunk.try_into().expect("Invalid chunk size"),
+                )
+                .expect("Failed to convert chunk to G1Affine");
+                self.validator_infos[i]
+                    .public_key
+                    .decompress_with_witness(uncompressed_key);
+            });
+        Ok(())
     }
 }
 

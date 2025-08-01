@@ -27,11 +27,17 @@ fn main() {
     // Latest verified validator verifier &  hash
     let verified_validator_verifier = env::read_frame();
 
+    let pubkey_witnesses = env::read_frame();
+
     env::log("cycle-tracker-end: read_inputs");
 
     // Deserialize Validator Verifier
-    let validator_verifier = ValidatorVerifier::from_bytes(&verified_validator_verifier)
+    let mut validator_verifier = ValidatorVerifier::from_bytes(&verified_validator_verifier)
         .expect("validator_verifier: could not create ValidatorVerifier from bytes");
+
+    validator_verifier
+        .ingest_key_witnesss(&pubkey_witnesses)
+        .expect("ValidatorVerifier::ingest_key_witnesss: could not ingest key witnesses");
 
     // Verify transaction inclusion in the LedgerInfoWithSignatures
     let transaction = TransactionInfo::from_bytes(&transaction_bytes)

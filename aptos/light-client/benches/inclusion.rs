@@ -26,6 +26,8 @@ use aptos_lc_core::crypto::hash::CryptoHash;
 use aptos_lc_core::types::ledger_info::LedgerInfoWithSignatures;
 use aptos_lc_core::types::trusted_state::TrustedState;
 use aptos_lc_core::types::validator::ValidatorVerifier;
+use aptos_types::trusted_state::TrustedState as AptosTrustedState;
+use bls12_381::G1Affine;
 use inclusion_program_builder::{INCLUSION_PROGRAM_ELF, INCLUSION_PROGRAM_ID};
 use risc0_zkvm::{BonsaiProver, ExecutorEnv, LocalProver, ProveInfo, Prover, Receipt};
 use serde::Serialize;
@@ -43,6 +45,8 @@ struct ProvingAssets<P> {
     sparse_merkle_proof_assets: SparseMerkleProofAssets,
     transaction_proof_assets: TransactionProofAssets,
     validator_verifier_assets: ValidatorVerifierAssets,
+    pubkey_witnesses: Vec<u8>,
+
     // Final state hash
     state_checkpoint_hash: [u8; 32],
 }
@@ -120,6 +124,7 @@ impl<P: Prover> ProvingAssets<P> {
             sparse_merkle_proof_assets,
             transaction_proof_assets,
             validator_verifier_assets,
+            pubkey_witnesses: build_pubkey_witnesses(aptos_wrapper.trusted_state()),
             state_checkpoint_hash: *state_checkpoint_hash.as_ref(),
         }
     }
@@ -136,6 +141,7 @@ impl<P: Prover> ProvingAssets<P> {
             .write_frame(&self.transaction_proof_assets.transaction_proof())
             .write_frame(&self.transaction_proof_assets.latest_li())
             .write_frame(&self.validator_verifier_assets.validator_verifier())
+            .write_frame(&self.pubkey_witnesses)
             .build()?;
 
         self.prover.prove(env, INCLUSION_PROGRAM_ELF)
@@ -152,6 +158,28 @@ fn read_array<const N: usize>(cursor: &mut Cursor<Vec<u8>>) -> std::io::Result<[
     let mut array = [0u8; N];
     cursor.read_exact(&mut array)?;
     Ok(array)
+}
+
+fn build_pubkey_witnesses(trusted_state: &AptosTrustedState) -> Vec<u8> {
+    match trusted_state {
+        AptosTrustedState::EpochState { epoch_state, .. } => epoch_state
+            .verifier
+            .get_ordered_account_addresses()
+            .iter()
+            .map(|addr| {
+                let compressed_bytes = epoch_state
+                    .verifier
+                    .get_public_key(addr)
+                    .expect("Public key not found for validator")
+                    .to_bytes();
+                G1Affine::from_compressed(&compressed_bytes)
+                    .expect("Failed to convert compressed bytes to G1Affine")
+                    .to_uncompressed()
+            })
+            .flatten()
+            .collect(),
+        _ => panic!("Expected epoch state in trusted state"),
+    }
 }
 
 #[derive(Serialize)]

@@ -19,7 +19,6 @@
 use anyhow::anyhow;
 use aptos_lc_core::aptos_test_utils::wrapper::AptosWrapper;
 use aptos_lc_core::crypto::hash::CryptoHash;
-use aptos_lc_core::crypto::sig::PublicKey;
 use aptos_lc_core::types::trusted_state::TrustedState;
 use aptos_types::trusted_state::TrustedState as AptosTrustedState;
 use bls12_381::G1Affine;
