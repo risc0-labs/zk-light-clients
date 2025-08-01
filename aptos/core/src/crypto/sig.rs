@@ -91,6 +91,17 @@ impl PublicKey {
             .get_or_init(|| G1Affine::from_compressed_unchecked(&self.compressed_pubkey).unwrap())
     }
 
+    /// Provide a `G1Affine` point that is the decompressed version of the public key.
+    ///
+    /// This is checked which is a much faster operation than decompressing the public key every time it is needed.
+    ///
+    pub fn decompress_with_witness(&self, witness: G1Affine) {
+        assert!(self.compressed_pubkey == witness.to_compressed());
+        self.pubkey
+            .set(witness)
+            .expect("PublicKey already decompressed");
+    }
+
     /// Aggregates a vector of public keys into a single public key.
     ///
     /// # Arguments

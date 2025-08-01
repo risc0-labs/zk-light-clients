@@ -24,7 +24,7 @@ pub const VALIDATOR_CONSENSUS_INFO_SIZE: usize =
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ValidatorConsensusInfo {
     address: AccountAddress,
-    public_key: PublicKey, // bls12-381
+    pub public_key: PublicKey, // bls12-381
     voting_power: u64,
 }
 
@@ -121,7 +121,7 @@ impl ValidatorConsensusInfo {
 #[getset(get = "pub")]
 pub struct ValidatorVerifier {
     /// A vector of each validator's on-chain account address to its pubkeys and voting power.
-    validator_infos: Vec<ValidatorConsensusInfo>,
+    pub validator_infos: Vec<ValidatorConsensusInfo>,
 }
 
 impl ValidatorVerifier {

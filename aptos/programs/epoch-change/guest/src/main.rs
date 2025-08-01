@@ -11,6 +11,7 @@ pub fn main() {
 
     let trusted_state_bytes = env::read_frame();
     let epoch_change_proof = env::read_frame();
+    let pubkey_witnesses = env::read_frame();
 
     env::log("cycle-tracker-end: read_inputs");
 
@@ -18,8 +19,11 @@ pub fn main() {
 
     env::log("cycle-tracker-start: deserialize_trusted_state");
 
-    let trusted_state = TrustedState::from_bytes(&trusted_state_bytes)
+    let mut trusted_state = TrustedState::from_bytes(&trusted_state_bytes)
         .expect("TrustedState::from_bytes: could not create trusted state");
+    trusted_state
+        .ingest_key_witnesss(&pubkey_witnesses)
+        .expect("TrustedState::ingest_key_witnesss: could not ingest key witnesses");
 
     env::log("cycle-tracker-end: deserialize_trusted_state");
 

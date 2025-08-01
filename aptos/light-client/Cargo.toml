@@ -12,6 +12,9 @@ license = { workspace = true }
 aptos-lc-core = { path = "../core", optional = true }
 aptos-programs = { path = "../aptos-programs" }
 
+aptos-types = { workspace = true, optional = true }
+
+
 # R0 guest crates
 epoch-change-program-builder = { path = "../programs/epoch-change" }
 inclusion-program-builder = { path = "../programs/inclusion" }
@@ -28,6 +31,7 @@ getset = { workspace = true }
 serde = { workspace = true, features = ["derive", "rc"] }
 thiserror = { workspace = true }
 bcs = { workspace = true, optional = true  }
+bls12_381 = { workspace = true, features = ["experimental"] }
 
 [dev-dependencies]
 aptos-programs = { path = "../aptos-programs", features = ["bench"] }
@@ -36,8 +40,8 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 
 [features]
-default = []
-aptos = ["dep:aptos-lc-core", "dep:bcs", "aptos-lc-core/aptos"]
+default = ["aptos"]
+aptos = ["dep:aptos-lc-core", "dep:bcs", "aptos-lc-core/aptos", "aptos-types"]
 
 [[bench]]
 name = "inclusion"

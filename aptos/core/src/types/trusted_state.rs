@@ -18,6 +18,7 @@ use crate::types::utils::{read_leb128, write_leb128};
 use crate::types::waypoint::{Waypoint, WAYPOINT_SIZE};
 use crate::types::Version;
 use anyhow::{bail, ensure, format_err};
+use bls12_381::G1Affine;
 use bytes::{Buf, BufMut, BytesMut};
 use serde::{Deserialize, Serialize};
 
@@ -277,6 +278,29 @@ impl TrustedState {
         }
 
         Ok(trusted_state)
+    }
+
+    pub fn ingest_key_witnesss(&mut self, pubkey_witnesses: &[u8]) -> anyhow::Result<()> {
+        match self {
+            TrustedState::EpochWaypoint(_) => {
+                unimplemented!("This LC doesn't support epoch waypoints")
+            }
+            TrustedState::EpochState { epoch_state, .. } => {
+                pubkey_witnesses
+                    .chunks(96)
+                    .enumerate()
+                    .for_each(|(i, chunk)| {
+                        let uncompressed_key = G1Affine::from_uncompressed_unchecked(
+                            chunk.try_into().expect("Invalid chunk size"),
+                        )
+                        .expect("Failed to convert chunk to G1Affine");
+                        epoch_state.verifier.validator_infos[i]
+                            .public_key
+                            .decompress_with_witness(uncompressed_key);
+                    });
+                Ok(())
+            }
+        }
     }
 }
 

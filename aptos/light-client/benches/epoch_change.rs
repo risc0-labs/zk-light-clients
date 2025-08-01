@@ -19,7 +19,10 @@
 use anyhow::anyhow;
 use aptos_lc_core::aptos_test_utils::wrapper::AptosWrapper;
 use aptos_lc_core::crypto::hash::CryptoHash;
+use aptos_lc_core::crypto::sig::PublicKey;
 use aptos_lc_core::types::trusted_state::TrustedState;
+use aptos_types::trusted_state::TrustedState as AptosTrustedState;
+use bls12_381::G1Affine;
 use epoch_change_program_builder::{EPOCH_CHANGE_PROGRAM_ELF, EPOCH_CHANGE_PROGRAM_ID};
 use risc0_zkvm::{BonsaiProver, ExecutorEnv, LocalProver, ProveInfo, Prover, Receipt};
 use serde::Serialize;
@@ -32,6 +35,7 @@ struct ProvingAssets<P> {
     trusted_state: Vec<u8>,
     validator_verifier_hash: Vec<u8>,
     epoch_change_proof: Vec<u8>,
+    pubkey_witnesses: Vec<u8>,
 }
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
@@ -89,6 +93,7 @@ impl<P: Prover> ProvingAssets<P> {
             trusted_state,
             validator_verifier_hash,
             epoch_change_proof: epoch_change_proof.clone(),
+            pubkey_witnesses: build_pubkey_witnesses(&aptos_wrapper.trusted_state()),
         }
     }
 
@@ -96,6 +101,7 @@ impl<P: Prover> ProvingAssets<P> {
         let env = ExecutorEnv::builder()
             .write_frame(&self.trusted_state)
             .write_frame(&self.epoch_change_proof)
+            .write_frame(&self.pubkey_witnesses)
             .build()?;
 
         self.prover.prove(env, EPOCH_CHANGE_PROGRAM_ELF)
@@ -105,6 +111,28 @@ impl<P: Prover> ProvingAssets<P> {
         receipt
             .verify(EPOCH_CHANGE_PROGRAM_ID)
             .expect("Verification failed");
+    }
+}
+
+fn build_pubkey_witnesses(trusted_state: &AptosTrustedState) -> Vec<u8> {
+    match trusted_state {
+        AptosTrustedState::EpochState { epoch_state, .. } => epoch_state
+            .verifier
+            .get_ordered_account_addresses()
+            .iter()
+            .map(|addr| {
+                let compressed_bytes = epoch_state
+                    .verifier
+                    .get_public_key(addr)
+                    .expect("Public key not found for validator")
+                    .to_bytes();
+                G1Affine::from_compressed(&compressed_bytes)
+                    .expect("Failed to convert compressed bytes to G1Affine")
+                    .to_uncompressed()
+            })
+            .flatten()
+            .collect(),
+        _ => panic!("Expected epoch state in trusted state"),
     }
 }
 
